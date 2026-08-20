@@ -11,12 +11,11 @@ class OpenAIScriptService:
         self.model = settings.openai_script_model
         self.api_key = settings.openai_api_key
 
-    async def generate_promotional_script(self, payload: ScriptGenerationRequest) -> str:
+    async def generate_text_from_prompt(self, prompt: str) -> str:
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured.")
 
         client = AsyncOpenAI(api_key=self.api_key)
-        prompt = build_script_prompt(payload)
         response = await client.responses.create(
             model=self.model,
             input=prompt,
@@ -38,3 +37,7 @@ class OpenAIScriptService:
         if not texts:
             raise RuntimeError("OpenAI did not return a script.")
         return "\n".join(texts).strip()
+
+    async def generate_promotional_script(self, payload: ScriptGenerationRequest) -> str:
+        prompt = build_script_prompt(payload)
+        return await self.generate_text_from_prompt(prompt)

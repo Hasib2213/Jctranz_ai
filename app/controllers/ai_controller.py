@@ -3,7 +3,11 @@ import base64
 from fastapi import HTTPException, UploadFile
 
 from app.db.mongo import MongoConnectionError
-from app.models.ai_models import ScriptGenerationRequest, VideoGenerationRequest
+from app.models.ai_models import (
+    ScriptGenerationRequest,
+    ScriptRegenerationRequest,
+    VideoGenerationRequest,
+)
 from app.services.ai_workflow_service import AIWorkflowService
 from app.utils.http_errors import dependency_error, not_found, provider_error
 
@@ -63,6 +67,18 @@ async def generate_video(payload: VideoGenerationRequest):
     service = AIWorkflowService()
     try:
         return await service.generate_video(payload)
+    except MongoConnectionError as exc:
+        raise dependency_error(str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise provider_error(str(exc)) from exc
+
+
+async def regenerate_script(payload: ScriptRegenerationRequest):
+    service = AIWorkflowService()
+    try:
+        return await service.regenerate_script(payload)
     except MongoConnectionError as exc:
         raise dependency_error(str(exc)) from exc
     except HTTPException:

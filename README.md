@@ -12,6 +12,9 @@ v
 OpenAI generates promotional script
 |
 v
+User can regenerate the script from the current version
+|
+v
 Use the returned job_id with user_id to generate the video from the saved script
 |
 v
@@ -70,6 +73,13 @@ POST /api/v1/ai/scripts
 
 Generate a promotional script with OpenAI from `multipart/form-data`:
 `user_id`, `product_name`, `product_description`, optional `product_images` files, and `time_seconds`.
+
+```http
+POST /api/v1/ai/scripts/regenerate
+```
+
+Regenerate the current script using JSON:
+`user_id`, `job_id`, and `promotional_script`.
 
 ```http
 POST /api/v1/ai/videos

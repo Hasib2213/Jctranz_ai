@@ -5,10 +5,12 @@ from app.models.ai_models import (
     JobStatus,
     ScriptGenerationRequest,
     ScriptGenerationResponse,
+    ScriptRegenerationRequest,
     VideoGenerationContext,
     VideoGenerationRequest,
     VideoGenerationResponse,
 )
+from app.prompts.script_prompt import build_script_regeneration_prompt
 from app.services.fal_service import FalVideoService
 from app.services.job_repository import JobRepository
 from app.services.openai_service import OpenAIScriptService
@@ -72,6 +74,59 @@ class AIWorkflowService:
             return ScriptGenerationResponse(job_id=job_id, promotional_script=script)
         except Exception as exc:
             await self.jobs.mark_failed(job_id, str(exc))
+            raise
+
+    async def regenerate_script(self, payload: ScriptRegenerationRequest) -> ScriptGenerationResponse:
+        job = await self.jobs.get_job(payload.job_id)
+        if job is None:
+            raise HTTPException(status_code=404, detail="AI workflow job not found.")
+
+        if job.get("user_id") != payload.user_id:
+            raise HTTPException(status_code=403, detail="This job does not belong to the user.")
+
+        product_name = job.get("product_name")
+        product_description = job.get("product_description")
+        product_images = job.get("product_images")
+        time_seconds = job.get("time_seconds") or self.settings.fal_video_duration_seconds
+
+        if not product_name:
+            raise HTTPException(status_code=400, detail="Saved job is missing product_name.")
+        if not product_description:
+            raise HTTPException(
+                status_code=400,
+                detail="Saved job is missing product_description.",
+            )
+
+        prompt = build_script_regeneration_prompt(
+            product_name=product_name,
+            product_description=product_description,
+            product_images=product_images if isinstance(product_images, list) else None,
+            time_seconds=time_seconds,
+            current_script=payload.promotional_script,
+        )
+
+        try:
+            regenerated_script = await self.openai.generate_text_from_prompt(prompt)
+            script_history = job.get("script_history")
+            if isinstance(script_history, list):
+                updated_history = [*script_history, payload.promotional_script]
+            else:
+                updated_history = [payload.promotional_script]
+
+            await self.jobs.update_job(
+                payload.job_id,
+                {
+                    "status": JobStatus.SCRIPT_GENERATED,
+                    "promotional_script": regenerated_script,
+                    "script_history": updated_history,
+                },
+            )
+            return ScriptGenerationResponse(
+                job_id=payload.job_id,
+                promotional_script=regenerated_script,
+            )
+        except Exception as exc:
+            await self.jobs.mark_failed(payload.job_id, str(exc))
             raise
 
     async def generate_video(self, payload: VideoGenerationRequest) -> VideoGenerationResponse:

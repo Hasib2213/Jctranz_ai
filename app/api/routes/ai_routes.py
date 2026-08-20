@@ -3,7 +3,12 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, UploadFile
 
 from app.controllers import ai_controller
-from app.models.ai_models import ScriptGenerationResponse, VideoGenerationRequest, VideoGenerationResponse
+from app.models.ai_models import (
+    ScriptGenerationResponse,
+    ScriptRegenerationRequest,
+    VideoGenerationRequest,
+    VideoGenerationResponse,
+)
 
 router = APIRouter(prefix="/ai", tags=["AI Workflow"])
 
@@ -23,6 +28,11 @@ async def create_promotional_script(
         time_seconds=time_seconds,
         product_images=product_images,
     )
+
+
+@router.post("/scripts/regenerate", response_model=ScriptGenerationResponse)
+async def regenerate_promotional_script(payload: ScriptRegenerationRequest):
+    return await ai_controller.regenerate_script(payload)
 
 
 @router.post("/videos", response_model=VideoGenerationResponse)
