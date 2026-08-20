@@ -14,12 +14,11 @@ class JobStatus(str, Enum):
 
 
 class ScriptGenerationRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
     product_name: str = Field(..., min_length=2, max_length=120)
     product_description: str = Field(..., min_length=10, max_length=2000)
-    creator_prompt: str | None = Field(default=None, max_length=1500)
-    target_audience: str | None = Field(default=None, max_length=300)
-    tone: str | None = Field(default="friendly, persuasive, UGC-style", max_length=200)
-    duration_seconds: int = Field(default=15, ge=5, le=30)
+    product_images: list[str] | None = None
+    time_seconds: int = Field(default=15, ge=5, le=30)
 
 
 class ScriptGenerationResponse(BaseModel):
@@ -29,14 +28,18 @@ class ScriptGenerationResponse(BaseModel):
 
 
 class VideoGenerationRequest(BaseModel):
-    job_id: str | None = None
+    user_id: str = Field(..., min_length=1, max_length=120)
+    job_id: str = Field(..., min_length=1, max_length=120)
+
+
+class VideoGenerationContext(BaseModel):
     product_name: str = Field(..., min_length=2, max_length=120)
     product_image_url: HttpUrl
     approved_script: str = Field(..., min_length=10, max_length=3000)
     video_style: str = Field(default="UGC product promo", max_length=200)
     voice_style: str = Field(default="natural friendly voiceover", max_length=200)
     music_style: str = Field(default="clean upbeat background music", max_length=200)
-    duration_seconds: int = Field(default=15, ge=5, le=30)
+    time_seconds: int = Field(default=15, ge=5, le=30)
 
 
 class VideoGenerationResponse(BaseModel):
@@ -49,10 +52,13 @@ class VideoGenerationResponse(BaseModel):
 class WorkflowJob(BaseModel):
     id: str | None = Field(default=None, alias="_id")
     status: JobStatus
+    user_id: str
     product_name: str
     product_description: str | None = None
+    product_images: list[str] | None = None
+    product_image_data_urls: list[str] | None = None
     product_image_url: str | None = None
-    creator_prompt: str | None = None
+    time_seconds: int | None = None
     promotional_script: str | None = None
     final_video_prompt: str | None = None
     video_url: str | None = None

@@ -1,19 +1,28 @@
-from fastapi import APIRouter
+from typing import Annotated
+
+from fastapi import APIRouter, File, Form, UploadFile
 
 from app.controllers import ai_controller
-from app.models.ai_models import (
-    ScriptGenerationRequest,
-    ScriptGenerationResponse,
-    VideoGenerationRequest,
-    VideoGenerationResponse,
-)
+from app.models.ai_models import ScriptGenerationResponse, VideoGenerationRequest, VideoGenerationResponse
 
 router = APIRouter(prefix="/ai", tags=["AI Workflow"])
 
 
 @router.post("/scripts", response_model=ScriptGenerationResponse)
-async def create_promotional_script(payload: ScriptGenerationRequest):
-    return await ai_controller.generate_script(payload)
+async def create_promotional_script(
+    user_id: Annotated[str, Form(...)],
+    product_name: Annotated[str, Form(...)],
+    product_description: Annotated[str, Form(...)],
+    time_seconds: Annotated[int, Form()] = 15,
+    product_images: Annotated[list[UploadFile] | None, File()] = None,
+):
+    return await ai_controller.generate_script(
+        user_id=user_id,
+        product_name=product_name,
+        product_description=product_description,
+        time_seconds=time_seconds,
+        product_images=product_images,
+    )
 
 
 @router.post("/videos", response_model=VideoGenerationResponse)

@@ -1,9 +1,9 @@
-from app.models.ai_models import VideoGenerationRequest
+from app.models.ai_models import VideoGenerationContext
 
 
-def build_video_prompt(payload: VideoGenerationRequest) -> str:
+def build_video_prompt(payload: VideoGenerationContext) -> str:
     return f"""
-Create a high-quality {payload.duration_seconds}-second promotional UGC product video.
+Create a high-quality {payload.time_seconds}-second promotional UGC product video.
 
 Product:
 {payload.product_name}

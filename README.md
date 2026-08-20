@@ -6,22 +6,16 @@ Python/FastAPI backend for this AI flow:
 Creator
 |
 v
-Enter product information / prompt
-|
-v
-Upload product image
+Enter user id, product name, description, optional product images, and target time
 |
 v
 OpenAI generates promotional script
 |
 v
-Creator edits / approves script
+Use the returned job_id with user_id to generate the video from the saved script
 |
 v
-System prepares final video prompt
-|
-v
-fal.AI generates ~15 sec promotional / UGC video with sound
+fal.AI generates the promotional / UGC video with sound
 |
 v
 System receives video_url
@@ -74,13 +68,15 @@ MONGODB_DB_NAME=jctranz_ai
 POST /api/v1/ai/scripts
 ```
 
-Generate a promotional script with OpenAI.
+Generate a promotional script with OpenAI from `multipart/form-data`:
+`user_id`, `product_name`, `product_description`, optional `product_images` files, and `time_seconds`.
 
 ```http
 POST /api/v1/ai/videos
 ```
 
-Generate a video with fal.AI using an approved script and uploaded product image URL.
+Generate a video with fal.AI using the saved script from the script job.
+Send only `user_id` and `job_id`; the service reuses the stored script and product image data.
 
 ```http
 GET /api/v1/ai/jobs/{job_id}

@@ -5,7 +5,7 @@ from typing import Any
 import fal_client
 
 from app.core.config import get_settings
-from app.models.ai_models import VideoGenerationRequest
+from app.models.ai_models import VideoGenerationContext
 from app.prompts.video_prompt import build_video_prompt
 
 
@@ -14,17 +14,25 @@ class FalVideoService:
         settings = get_settings()
         self.model = settings.fal_video_model
         self.api_key = settings.fal_key
+        self.default_duration_seconds = settings.fal_video_duration_seconds
         os.environ["FAL_KEY"] = self.api_key
 
-    async def generate_video(self, payload: VideoGenerationRequest) -> tuple[str, dict[str, Any], str]:
+    async def generate_video(self, payload: VideoGenerationContext) -> tuple[str, dict[str, Any], str]:
         if not self.api_key:
             raise RuntimeError("FAL_KEY is not configured.")
+        if not payload.product_name:
+            raise RuntimeError("product_name is required to generate a video.")
+        if not payload.approved_script:
+            raise RuntimeError("approved_script is required to generate a video.")
+        if not payload.product_image_url:
+            raise RuntimeError("product_image_url is required to generate a video.")
 
         final_prompt = build_video_prompt(payload)
+        duration_seconds = payload.time_seconds or self.default_duration_seconds
         arguments = {
             "prompt": final_prompt,
             "image_url": str(payload.product_image_url),
-            "duration": str(payload.duration_seconds),
+            "duration": str(duration_seconds),
         }
 
         result = await asyncio.to_thread(

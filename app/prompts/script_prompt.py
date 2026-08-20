@@ -2,8 +2,9 @@ from app.models.ai_models import ScriptGenerationRequest
 
 
 def build_script_prompt(payload: ScriptGenerationRequest) -> str:
-    target_audience = payload.target_audience or "general social media buyers"
-    creator_prompt = payload.creator_prompt or "Create a clear, high-converting product promo."
+    image_lines = ""
+    if payload.product_images:
+        image_lines = "\n".join(f"- {image}" for image in payload.product_images)
 
     return f"""
 Create a short promotional UGC video script for a product.
@@ -14,17 +15,11 @@ Product name:
 Product description:
 {payload.product_description}
 
-Creator direction:
-{creator_prompt}
-
-Target audience:
-{target_audience}
-
-Tone:
-{payload.tone}
+Product reference images:
+{image_lines or "None provided."}
 
 Video duration:
-About {payload.duration_seconds} seconds.
+About {payload.time_seconds} seconds.
 
 Requirements:
 - Write only the creator-facing spoken script.
