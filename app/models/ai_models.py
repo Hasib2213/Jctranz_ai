@@ -13,6 +13,13 @@ class JobStatus(str, Enum):
     FAILED = "failed"
 
 
+class ScriptScene(BaseModel):
+    sequence: int = Field(..., ge=1)
+    time: str = Field(..., min_length=1, max_length=40)
+    visual: str = Field(..., min_length=1, max_length=1000)
+    voiceover: str = Field(..., min_length=1, max_length=1000)
+
+
 class ScriptGenerationRequest(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=120)
     product_name: str = Field(..., min_length=2, max_length=120)
@@ -23,14 +30,14 @@ class ScriptGenerationRequest(BaseModel):
 
 class ScriptGenerationResponse(BaseModel):
     job_id: str
-    promotional_script: str
+    promotional_script: list[ScriptScene]
     status: JobStatus = JobStatus.SCRIPT_GENERATED
 
 
 class ScriptRegenerationRequest(BaseModel):
     user_id: str = Field(..., min_length=1, max_length=120)
     job_id: str = Field(..., min_length=1, max_length=120)
-    promotional_script: str = Field(..., min_length=10, max_length=3000)
+    promotional_script: list[ScriptScene] = Field(..., min_length=1)
 
 
 class VideoGenerationRequest(BaseModel):
@@ -65,8 +72,8 @@ class WorkflowJob(BaseModel):
     product_image_data_urls: list[str] | None = None
     product_image_url: str | None = None
     time_seconds: int | None = None
-    script_history: list[str] | None = None
-    promotional_script: str | None = None
+    script_history: list[list[ScriptScene]] | None = None
+    promotional_script: list[ScriptScene] | None = None
     final_video_prompt: str | None = None
     video_url: str | None = None
     provider_response: dict[str, Any] | None = None

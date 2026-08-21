@@ -73,6 +73,7 @@ POST /api/v1/ai/scripts
 
 Generate a promotional script with OpenAI from `multipart/form-data`:
 `user_id`, `product_name`, `product_description`, optional `product_images` files, and `time_seconds`.
+Response format: JSON with a `scenes` array, where each scene has `sequence`, `time`, `visual`, and `voiceover`.
 
 ```http
 POST /api/v1/ai/scripts/regenerate

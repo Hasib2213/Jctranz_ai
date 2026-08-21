@@ -1,3 +1,5 @@
+import json
+
 from fastapi import HTTPException
 
 from app.core.config import get_settings
@@ -6,6 +8,7 @@ from app.models.ai_models import (
     ScriptGenerationRequest,
     ScriptGenerationResponse,
     ScriptRegenerationRequest,
+    ScriptScene,
     VideoGenerationContext,
     VideoGenerationRequest,
     VideoGenerationResponse,
@@ -42,6 +45,23 @@ class AIWorkflowService:
 
         return None
 
+    def _script_scenes_to_text(self, scenes: list[dict] | list[ScriptScene] | None) -> str:
+        if not scenes:
+            return ""
+
+        lines: list[str] = []
+        for scene in scenes:
+            if isinstance(scene, ScriptScene):
+                scene_data = scene.model_dump()
+            else:
+                scene_data = scene
+            sequence = scene_data.get("sequence", "")
+            time = scene_data.get("time", "")
+            visual = scene_data.get("visual", "")
+            voiceover = scene_data.get("voiceover", "")
+            lines.append(f"{sequence}. [{time}] {visual} | VO: {voiceover}")
+        return "\n".join(lines)
+
     async def generate_script(
         self,
         payload: ScriptGenerationRequest,
@@ -64,14 +84,17 @@ class AIWorkflowService:
 
         try:
             script = await self.openai.generate_promotional_script(payload)
+            scenes = script.get("scenes")
+            if not isinstance(scenes, list) or not scenes:
+                raise RuntimeError("OpenAI did not return a valid scenes array.")
             await self.jobs.update_job(
                 job_id,
                 {
                     "status": JobStatus.SCRIPT_GENERATED,
-                    "promotional_script": script,
+                    "promotional_script": scenes,
                 },
             )
-            return ScriptGenerationResponse(job_id=job_id, promotional_script=script)
+            return ScriptGenerationResponse(job_id=job_id, promotional_script=scenes)
         except Exception as exc:
             await self.jobs.mark_failed(job_id, str(exc))
             raise
@@ -102,28 +125,33 @@ class AIWorkflowService:
             product_description=product_description,
             product_images=product_images if isinstance(product_images, list) else None,
             time_seconds=time_seconds,
-            current_script=payload.promotional_script,
+            current_script=json.dumps(
+                [scene.model_dump() for scene in payload.promotional_script], ensure_ascii=False
+            ),
         )
 
         try:
             regenerated_script = await self.openai.generate_text_from_prompt(prompt)
+            regenerated_scenes = regenerated_script.get("scenes")
+            if not isinstance(regenerated_scenes, list) or not regenerated_scenes:
+                raise RuntimeError("OpenAI did not return a valid scenes array.")
             script_history = job.get("script_history")
             if isinstance(script_history, list):
-                updated_history = [*script_history, payload.promotional_script]
+                updated_history = [*script_history, [scene.model_dump() for scene in payload.promotional_script]]
             else:
-                updated_history = [payload.promotional_script]
+                updated_history = [[scene.model_dump() for scene in payload.promotional_script]]
 
             await self.jobs.update_job(
                 payload.job_id,
                 {
                     "status": JobStatus.SCRIPT_GENERATED,
-                    "promotional_script": regenerated_script,
+                    "promotional_script": regenerated_scenes,
                     "script_history": updated_history,
                 },
             )
             return ScriptGenerationResponse(
                 job_id=payload.job_id,
-                promotional_script=regenerated_script,
+                promotional_script=regenerated_scenes,
             )
         except Exception as exc:
             await self.jobs.mark_failed(payload.job_id, str(exc))
@@ -138,7 +166,7 @@ class AIWorkflowService:
             raise HTTPException(status_code=403, detail="This job does not belong to the user.")
 
         product_name = job.get("product_name")
-        approved_script = job.get("promotional_script")
+        approved_script = self._script_scenes_to_text(job.get("promotional_script"))
         product_image_url = self._primary_job_image(job)
         time_seconds = job.get("time_seconds") or self.settings.fal_video_duration_seconds
 

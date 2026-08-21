@@ -1,3 +1,7 @@
+import json
+import re
+from typing import Any
+
 from openai import AsyncOpenAI
 
 from app.core.config import get_settings
@@ -11,7 +15,15 @@ class OpenAIScriptService:
         self.model = settings.openai_script_model
         self.api_key = settings.openai_api_key
 
-    async def generate_text_from_prompt(self, prompt: str) -> str:
+    def _parse_json_response(self, text: str) -> dict[str, Any]:
+        cleaned_text = text.strip()
+        if cleaned_text.startswith("```"):
+            cleaned_text = re.sub(r"^```(?:json)?\s*", "", cleaned_text)
+            cleaned_text = re.sub(r"\s*```$", "", cleaned_text)
+
+        return json.loads(cleaned_text)
+
+    async def generate_text_from_prompt(self, prompt: str) -> dict[str, Any]:
         if not self.api_key:
             raise RuntimeError("OPENAI_API_KEY is not configured.")
 
@@ -24,7 +36,7 @@ class OpenAIScriptService:
         )
         output_text = getattr(response, "output_text", None)
         if output_text:
-            return output_text.strip()
+            return self._parse_json_response(output_text)
 
         # Fallback for SDK response shapes that expose text inside output items.
         texts: list[str] = []
@@ -36,8 +48,8 @@ class OpenAIScriptService:
 
         if not texts:
             raise RuntimeError("OpenAI did not return a script.")
-        return "\n".join(texts).strip()
+        return self._parse_json_response("\n".join(texts).strip())
 
-    async def generate_promotional_script(self, payload: ScriptGenerationRequest) -> str:
+    async def generate_promotional_script(self, payload: ScriptGenerationRequest) -> dict[str, Any]:
         prompt = build_script_prompt(payload)
         return await self.generate_text_from_prompt(prompt)
