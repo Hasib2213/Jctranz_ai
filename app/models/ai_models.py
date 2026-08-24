@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field
 
 
 class JobStatus(str, Enum):
@@ -47,7 +47,7 @@ class VideoGenerationRequest(BaseModel):
 
 class VideoGenerationContext(BaseModel):
     product_name: str = Field(..., min_length=2, max_length=120)
-    product_image_url: HttpUrl
+    product_image_url: str | None = None
     approved_script: str = Field(..., min_length=10, max_length=3000)
     video_style: str = Field(default="UGC product promo", max_length=200)
     voice_style: str = Field(default="natural friendly voiceover", max_length=200)
@@ -74,7 +74,9 @@ class WorkflowJob(BaseModel):
     time_seconds: int | None = None
     script_history: list[list[ScriptScene]] | None = None
     promotional_script: list[ScriptScene] | None = None
+    approved_script_text: str | None = None
     final_video_prompt: str | None = None
+    video_generation_mode: str | None = None
     video_url: str | None = None
     provider_response: dict[str, Any] | None = None
     error_message: str | None = None

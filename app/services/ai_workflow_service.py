@@ -45,16 +45,20 @@ class AIWorkflowService:
 
         return None
 
-    def _script_scenes_to_text(self, scenes: list[dict] | list[ScriptScene] | None) -> str:
+    def _script_scenes_to_text(self, scenes: list[dict] | list[ScriptScene] | str | None) -> str:
         if not scenes:
             return ""
+        if isinstance(scenes, str):
+            return scenes
 
         lines: list[str] = []
         for scene in scenes:
             if isinstance(scene, ScriptScene):
                 scene_data = scene.model_dump()
-            else:
+            elif isinstance(scene, dict):
                 scene_data = scene
+            else:
+                continue
             sequence = scene_data.get("sequence", "")
             time = scene_data.get("time", "")
             visual = scene_data.get("visual", "")
@@ -174,8 +178,6 @@ class AIWorkflowService:
             raise HTTPException(status_code=400, detail="Saved job is missing product_name.")
         if not approved_script:
             raise HTTPException(status_code=400, detail="Saved job is missing the promotional script.")
-        if not product_image_url:
-            raise HTTPException(status_code=400, detail="Saved job is missing a product image.")
 
         resolved_payload = VideoGenerationContext(
             product_name=product_name,
@@ -191,8 +193,9 @@ class AIWorkflowService:
                 "status": JobStatus.VIDEO_GENERATING,
                 "product_name": product_name,
                 "product_image_url": product_image_url,
-                "promotional_script": approved_script,
+                "approved_script_text": approved_script,
                 "time_seconds": time_seconds,
+                "video_generation_mode": "image-to-video" if product_image_url else "text-to-video",
             },
         )
 

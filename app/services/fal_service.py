@@ -12,7 +12,8 @@ from app.prompts.video_prompt import build_video_prompt
 class FalVideoService:
     def __init__(self) -> None:
         settings = get_settings()
-        self.model = settings.fal_video_model
+        self.image_model = settings.fal_video_model
+        self.text_model = settings.fal_text_video_model
         self.api_key = settings.fal_key
         self.default_duration_seconds = settings.fal_video_duration_seconds
         os.environ["FAL_KEY"] = self.api_key
@@ -24,20 +25,22 @@ class FalVideoService:
             raise RuntimeError("product_name is required to generate a video.")
         if not payload.approved_script:
             raise RuntimeError("approved_script is required to generate a video.")
-        if not payload.product_image_url:
-            raise RuntimeError("product_image_url is required to generate a video.")
 
         final_prompt = build_video_prompt(payload)
         duration_seconds = payload.time_seconds or self.default_duration_seconds
         arguments = {
             "prompt": final_prompt,
-            "image_url": str(payload.product_image_url),
             "duration": str(duration_seconds),
         }
+        model = self.text_model
+
+        if payload.product_image_url:
+            model = self.image_model
+            arguments["image_url"] = payload.product_image_url
 
         result = await asyncio.to_thread(
             fal_client.subscribe,
-            self.model,
+            model,
             arguments=arguments,
             with_logs=True,
         )
@@ -46,24 +49,49 @@ class FalVideoService:
         if not video_url:
             raise RuntimeError("fal.AI did not return a video_url.")
 
-        return video_url, dict(result), final_prompt
+        provider_response = result if isinstance(result, dict) else {"result": result}
+        provider_response["model"] = model
+        provider_response["generation_mode"] = (
+            "image-to-video" if payload.product_image_url else "text-to-video"
+        )
 
-    def _extract_video_url(self, result: dict[str, Any]) -> str | None:
+        return video_url, provider_response, final_prompt
+
+    def _extract_video_url(self, result: Any) -> str | None:
+        if isinstance(result, str):
+            if result.startswith(("http://", "https://")):
+                return result
+            return None
+
+        if isinstance(result, list):
+            for item in result:
+                video_url = self._extract_video_url(item)
+                if video_url:
+                    return video_url
+            return None
+
+        if not isinstance(result, dict):
+            return None
+
         if isinstance(result.get("video_url"), str):
             return result["video_url"]
 
+        if isinstance(result.get("url"), str):
+            return result["url"]
+
         video = result.get("video")
-        if isinstance(video, dict) and isinstance(video.get("url"), str):
-            return video["url"]
+        video_url = self._extract_video_url(video)
+        if video_url:
+            return video_url
 
         videos = result.get("videos")
-        if isinstance(videos, list) and videos:
-            first_video = videos[0]
-            if isinstance(first_video, dict) and isinstance(first_video.get("url"), str):
-                return first_video["url"]
+        videos_url = self._extract_video_url(videos)
+        if videos_url:
+            return videos_url
 
         output = result.get("output")
-        if isinstance(output, dict):
-            return self._extract_video_url(output)
+        output_url = self._extract_video_url(output)
+        if output_url:
+            return output_url
 
         return None

@@ -13,6 +13,7 @@ class Settings(BaseSettings):
 
     fal_key: str = ""
     fal_video_model: str = "fal-ai/kling-video/v1.6/pro/image-to-video"
+    fal_text_video_model: str = "fal-ai/kling-video/v2.6/pro/text-to-video"
     fal_video_duration_seconds: int = 15
 
     mongodb_uri: str = "mongodb://localhost:27017"
