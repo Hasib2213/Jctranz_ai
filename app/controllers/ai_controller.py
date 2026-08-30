@@ -37,6 +37,9 @@ async def _serialize_uploaded_images(product_images: list[UploadFile] | None):
     return image_labels, image_data_urls
 
 
+from app.services.orchestrator_service import FMFOAIOrchestrator
+
+
 async def generate_script(
     user_id: str,
     product_name: str,
@@ -44,7 +47,7 @@ async def generate_script(
     time_seconds: int,
     product_images: list[UploadFile] | None = None,
 ):
-    service = AIWorkflowService()
+    orchestrator = FMFOAIOrchestrator()
     try:
         image_labels, image_data_urls = await _serialize_uploaded_images(product_images)
         payload = ScriptGenerationRequest(
@@ -54,7 +57,7 @@ async def generate_script(
             product_images=image_labels,
             time_seconds=time_seconds,
         )
-        return await service.generate_script(payload, image_data_urls)
+        return await orchestrator.execute_script_workflow(payload, image_data_urls)
     except MongoConnectionError as exc:
         raise dependency_error(str(exc)) from exc
     except HTTPException:
@@ -64,9 +67,9 @@ async def generate_script(
 
 
 async def generate_video(payload: VideoGenerationRequest):
-    service = AIWorkflowService()
+    orchestrator = FMFOAIOrchestrator()
     try:
-        return await service.generate_video(payload)
+        return await orchestrator.execute_video_workflow(payload)
     except MongoConnectionError as exc:
         raise dependency_error(str(exc)) from exc
     except HTTPException:

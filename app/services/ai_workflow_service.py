@@ -14,6 +14,7 @@ from app.models.ai_models import (
     VideoGenerationResponse,
 )
 from app.prompts.script_prompt import build_script_regeneration_prompt
+from app.services.cloudinary_service import CloudinaryService
 from app.services.fal_service import FalVideoService
 from app.services.job_repository import JobRepository
 from app.services.openai_service import OpenAIScriptService
@@ -25,6 +26,7 @@ class AIWorkflowService:
         self.jobs = JobRepository()
         self.openai = OpenAIScriptService()
         self.fal = FalVideoService()
+        self.cloudinary = CloudinaryService()
 
     def _primary_job_image(self, job: dict) -> str | None:
         product_image_data_urls = job.get("product_image_data_urls")
@@ -203,18 +205,27 @@ class AIWorkflowService:
             video_url, provider_response, final_prompt = await self.fal.generate_video(
                 resolved_payload
             )
+
+            # Build Cloudinary Asset (Storage Step 4)
+            cloudinary_result = self.cloudinary.upload_video(video_url=video_url, job_id=job_id)
+            cdn_video_url = cloudinary_result.get("secure_url") or video_url
+
             await self.jobs.update_job(
                 job_id,
                 {
                     "status": JobStatus.VIDEO_COMPLETED,
                     "final_video_prompt": final_prompt,
                     "video_url": video_url,
+                    "cdn_video_url": cdn_video_url,
+                    "cloudinary_asset": cloudinary_result,
                     "provider_response": provider_response,
                 },
             )
             return VideoGenerationResponse(
                 job_id=job_id,
                 video_url=video_url,
+                cdn_video_url=cdn_video_url,
+                cloudinary_asset=cloudinary_result,
                 provider_response=provider_response,
             )
         except Exception as exc:

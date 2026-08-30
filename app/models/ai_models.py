@@ -58,6 +58,8 @@ class VideoGenerationContext(BaseModel):
 class VideoGenerationResponse(BaseModel):
     job_id: str
     video_url: str
+    cdn_video_url: str | None = None
+    cloudinary_asset: dict[str, Any] | None = None
     provider_response: dict[str, Any] = Field(default_factory=dict)
     status: JobStatus = JobStatus.VIDEO_COMPLETED
 
@@ -78,6 +80,8 @@ class WorkflowJob(BaseModel):
     final_video_prompt: str | None = None
     video_generation_mode: str | None = None
     video_url: str | None = None
+    cdn_video_url: str | None = None
+    cloudinary_asset: dict[str, Any] | None = None
     provider_response: dict[str, Any] | None = None
     error_message: str | None = None
     created_at: datetime
