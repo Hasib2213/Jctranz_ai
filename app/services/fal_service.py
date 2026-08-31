@@ -4,6 +4,7 @@ import tempfile
 import subprocess
 import urllib.request
 import logging
+import re
 from typing import Any
 
 import fal_client
@@ -35,11 +36,24 @@ def _calculate_clip_durations(total_seconds: int) -> list[str]:
         return clips or ["10"]
 
 
+def _normalize_image_size(resolution: str) -> str | dict[str, int]:
+    resolution = resolution.strip()
+    match = re.fullmatch(r"(\d+)\s*[xX]\s*(\d+)", resolution)
+    if match:
+        return {
+            "width": int(match.group(1)),
+            "height": int(match.group(2)),
+        }
+    return resolution
+
+
 class FalVideoService:
     def __init__(self) -> None:
         settings = get_settings()
+        self.image_generation_model = settings.fal_image_model
         self.image_model = settings.fal_video_model
         self.text_model = settings.fal_text_video_model
+        self.video_edit_model = settings.fal_video_edit_model
         self.api_key = settings.fal_key
         self.default_duration_seconds = settings.fal_video_duration_seconds
         os.environ["FAL_KEY"] = self.api_key
@@ -114,6 +128,108 @@ class FalVideoService:
         last_provider_response["all_clip_urls"] = generated_clips
 
         return final_video_url, last_provider_response, final_prompt
+
+    async def generate_image_from_prompt(
+        self,
+        *,
+        prompt: str,
+        resolution: str,
+        aspect_ratio: str,
+    ) -> tuple[str, dict[str, Any], str]:
+        if not self.api_key:
+            raise RuntimeError("FAL_KEY is not configured.")
+        if not self.image_generation_model:
+            raise RuntimeError("FAL_IMAGE_MODEL is not configured.")
+
+        arguments = {
+            "prompt": prompt,
+            "image_size": _normalize_image_size(resolution),
+            "aspect_ratio": aspect_ratio,
+            "num_images": 1,
+        }
+        result = await asyncio.to_thread(
+            fal_client.subscribe,
+            self.image_generation_model,
+            arguments=arguments,
+            with_logs=True,
+        )
+
+        image_url = self._extract_media_url(result, preferred_keys=("image", "images"))
+        if not image_url:
+            raise RuntimeError("fal.AI did not return an image URL.")
+
+        provider_response = result if isinstance(result, dict) else {"result": result}
+        return image_url, provider_response, self.image_generation_model
+
+    async def generate_video_from_prompt(
+        self,
+        *,
+        prompt: str,
+        resolution: str,
+        aspect_ratio: str,
+        time_seconds: int,
+        audio: bool,
+    ) -> tuple[str, dict[str, Any], str]:
+        if not self.api_key:
+            raise RuntimeError("FAL_KEY is not configured.")
+
+        arguments = {
+            "prompt": prompt,
+            "duration": str(time_seconds),
+            "aspect_ratio": aspect_ratio,
+            "resolution": resolution,
+            "generate_audio": audio,
+        }
+        result = await asyncio.to_thread(
+            fal_client.subscribe,
+            self.text_model,
+            arguments=arguments,
+            with_logs=True,
+        )
+
+        video_url = self._extract_video_url(result)
+        if not video_url:
+            raise RuntimeError("fal.AI did not return a video URL.")
+
+        provider_response = result if isinstance(result, dict) else {"result": result}
+        return video_url, provider_response, self.text_model
+
+    async def edit_video_from_prompt(
+        self,
+        *,
+        prompt: str,
+        video_ref: str,
+        image_ref: str | None = None,
+        audio: bool = True,
+    ) -> tuple[str, dict[str, Any], str]:
+        if not self.api_key:
+            raise RuntimeError("FAL_KEY is not configured.")
+        if not self.video_edit_model:
+            raise RuntimeError("FAL_VIDEO_EDIT_MODEL is not configured.")
+        if not video_ref:
+            raise RuntimeError("video_ref is required for video editing.")
+
+        arguments: dict[str, Any] = {
+            "prompt": prompt,
+            "video_url": video_ref,
+            "audio": audio,
+        }
+        if image_ref:
+            arguments["image_url"] = image_ref
+
+        result = await asyncio.to_thread(
+            fal_client.subscribe,
+            self.video_edit_model,
+            arguments=arguments,
+            with_logs=True,
+        )
+
+        video_url = self._extract_video_url(result)
+        if not video_url:
+            raise RuntimeError("fal.AI did not return an edited video URL.")
+
+        provider_response = result if isinstance(result, dict) else {"result": result}
+        return video_url, provider_response, self.video_edit_model
 
     def _stitch_video_clips(self, clip_urls: list[str]) -> str:
         """
@@ -199,5 +315,35 @@ class FalVideoService:
         output_url = self._extract_video_url(output)
         if output_url:
             return output_url
+
+        return None
+
+    def _extract_media_url(
+        self, result: Any, preferred_keys: tuple[str, ...] = ("image", "video", "output")
+    ) -> str | None:
+        if isinstance(result, str):
+            if result.startswith(("http://", "https://", "data:")):
+                return result
+            return None
+
+        if isinstance(result, list):
+            for item in result:
+                url = self._extract_media_url(item, preferred_keys=preferred_keys)
+                if url:
+                    return url
+            return None
+
+        if not isinstance(result, dict):
+            return None
+
+        for key in ("url", "image_url", "video_url", "file_url"):
+            value = result.get(key)
+            if isinstance(value, str) and value.startswith(("http://", "https://", "data:")):
+                return value
+
+        for key in preferred_keys + ("output", "data", "result", "media"):
+            url = self._extract_media_url(result.get(key), preferred_keys=preferred_keys)
+            if url:
+                return url
 
         return None

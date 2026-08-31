@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class JobStatus(str, Enum):
@@ -89,3 +89,118 @@ class WorkflowJob(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+class AIGenerationType(str, Enum):
+    IMAGE_GENERATION = "image_generation"
+    VIDEO_GENERATION = "video_generation"
+    VIDEO_EDIT = "video_edit"
+
+
+class CostSummary(BaseModel):
+    openAI_cost: str = "$0.00"
+    falAI_cost: str = "$0.00"
+    total_cost: str = "$0.00"
+
+
+class PromptVersion(BaseModel):
+    version: int
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    openAI_cost: str = "$0.00"
+    created_at: datetime | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ImageGenerationPromptRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+    prompt: str = Field(..., min_length=1, max_length=3000)
+    resolution: str = Field(..., min_length=1, max_length=80)
+    aspect_ratio: str = Field(..., min_length=1, max_length=40)
+
+
+class ImageGenerationPromptResponse(BaseModel):
+    user_id: str
+    content_id: str
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    user_prompt: str
+    resolution: str
+    aspect_ratio: str
+    openAI_cost: str = "$0.00"
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ImageGenerationPromptDetailResponse(ImageGenerationPromptResponse):
+    prompt_versions: list[PromptVersion] = Field(default_factory=list)
+    openAI_cost_total: str = "$0.00"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class VideoGenerationPromptRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+    prompt: str = Field(..., min_length=1, max_length=3000)
+    resolution: str = Field(..., min_length=1, max_length=80)
+    aspect_ratio: str = Field(..., min_length=1, max_length=40)
+    time: int = Field(..., ge=5, le=30)
+    audio: bool = True
+
+
+class VideoGenerationPromptResponse(BaseModel):
+    user_id: str
+    content_id: str
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    user_prompt: str
+    resolution: str
+    aspect_ratio: str
+    time: int
+    audio: bool
+    openAI_cost: str = "$0.00"
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class VideoGenerationPromptDetailResponse(VideoGenerationPromptResponse):
+    prompt_versions: list[PromptVersion] = Field(default_factory=list)
+    openAI_cost_total: str = "$0.00"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PromptRegenerationRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+
+
+class VideoEditPromptResponse(BaseModel):
+    user_id: str
+    content_id: str
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    user_prompt: str
+    video_ref: str
+    image_ref: str | None = None
+    audio: bool
+    openAI_cost: str = "$0.00"
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class VideoEditPromptDetailResponse(VideoEditPromptResponse):
+    prompt_versions: list[PromptVersion] = Field(default_factory=list)
+    openAI_cost_total: str = "$0.00"
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MediaGenerationRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+    content_id: str = Field(..., min_length=1, max_length=120)
+
+
+class MediaGenerationResponse(BaseModel):
+    user_id: str
+    generated_content_id: str
+    content_url: str
+    openAI_cost: str
+    falAI_cost: str
+    total_cost: str
