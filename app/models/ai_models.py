@@ -1,6 +1,6 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -143,7 +143,7 @@ class VideoGenerationPromptRequest(BaseModel):
     prompt: str = Field(..., min_length=1, max_length=3000)
     resolution: str = Field(..., min_length=1, max_length=80)
     aspect_ratio: str = Field(..., min_length=1, max_length=40)
-    time: int = Field(..., ge=5, le=30)
+    time: Literal[5, 10, 15, 20, 30]
     audio: bool = True
 
 

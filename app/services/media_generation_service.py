@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import shutil
 from typing import Any
 
 from fastapi import HTTPException
@@ -221,6 +223,7 @@ class MediaGenerationService:
         )
         storage_result = self.storage.upload_video(video_url, job_id=payload.content_id)
         content_url = storage_result.get("secure_url") or video_url
+        self._cleanup_uploaded_local_source(video_url, storage_result)
         fal_cost = self.costs.fal_video_cost(
             time_seconds,
             provider_response=provider_response,
@@ -237,6 +240,25 @@ class MediaGenerationService:
             fal_cost=fal_cost,
             storage_result=storage_result,
         )
+
+    def _cleanup_uploaded_local_source(
+        self, file_source: str, storage_result: dict[str, Any]
+    ) -> None:
+        if file_source.startswith(("http://", "https://")):
+            return
+        if not storage_result.get("is_uploaded"):
+            return
+        if not os.path.exists(file_source):
+            return
+
+        parent_dir = os.path.dirname(file_source)
+        if os.path.basename(parent_dir).startswith("jctranz_video_"):
+            shutil.rmtree(parent_dir, ignore_errors=True)
+        else:
+            try:
+                os.remove(file_source)
+            except OSError:
+                pass
 
     async def edit_video(self, payload: MediaGenerationRequest) -> MediaGenerationResponse:
         content = await self._require_typed_content(
