@@ -6,6 +6,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
+from app.core.config import get_settings
 from app.models.ai_models import (
     AIGenerationType,
     ImageGenerationPromptDetailResponse,
@@ -25,6 +26,7 @@ from app.services.content_repository import ContentRepository
 from app.services.cost_service import CostService
 from app.services.fal_service import FalVideoService
 from app.services.generation_repository import GenerationRepository
+from app.services.magica_service import MagicaVideoService
 from app.services.openai_service import OpenAIScriptService
 
 
@@ -32,8 +34,10 @@ class MediaGenerationService:
     def __init__(self) -> None:
         self.contents = ContentRepository()
         self.generations = GenerationRepository()
+        self.settings = get_settings()
         self.openai = OpenAIScriptService()
         self.fal = FalVideoService()
+        self.magica = MagicaVideoService()
         self.storage = CloudinaryService()
         self.costs = CostService()
 
@@ -214,30 +218,45 @@ class MediaGenerationService:
         time_seconds = int(settings.get("time") or 5)
         audio = bool(settings.get("audio", True))
 
-        video_url, provider_response, model = await self.fal.generate_video_from_prompt(
-            prompt=content["ai_refined_prompt"],
-            resolution=settings.get("resolution", ""),
-            aspect_ratio=settings.get("aspect_ratio", ""),
-            time_seconds=time_seconds,
-            audio=audio,
-        )
-        storage_result = self.storage.upload_video(video_url, job_id=payload.content_id)
-        content_url = storage_result.get("secure_url") or video_url
-        self._cleanup_uploaded_local_source(video_url, storage_result)
-        fal_cost = self.costs.fal_video_cost(
+        if self.settings.magica_video_provider_enabled and self.magica.is_configured:
+            video_url, provider_response, model = await self.magica.generate_video_from_prompt(
+                prompt=content["ai_refined_prompt"],
+                resolution=settings.get("resolution", ""),
+                aspect_ratio=settings.get("aspect_ratio", ""),
+                time_seconds=time_seconds,
+                audio=audio,
+            )
+            provider = "magica"
+        else:
+            video_url, provider_response, model = await self.fal.generate_video_from_prompt(
+                prompt=content["ai_refined_prompt"],
+                resolution=settings.get("resolution", ""),
+                aspect_ratio=settings.get("aspect_ratio", ""),
+                time_seconds=time_seconds,
+                audio=audio,
+            )
+            provider = "fal_ai"
+
+        provider_cost = self.costs.fal_video_cost(
             time_seconds,
             provider_response=provider_response,
             audio=audio,
         )
+        if provider == "magica":
+            provider_cost = float(provider_response.get("estimated_cost_usd") or provider_cost)
+
+        storage_result = self.storage.upload_video(video_url, job_id=payload.content_id)
+        content_url = storage_result.get("secure_url") or video_url
+        self._cleanup_uploaded_local_source(video_url, storage_result)
 
         return await self._save_generation_response(
             user_id=payload.user_id,
             content=content,
             content_url=content_url,
             provider_response=provider_response,
-            provider="fal_ai",
+            provider=provider,
             model=model,
-            fal_cost=fal_cost,
+            fal_cost=provider_cost,
             storage_result=storage_result,
         )
 
@@ -252,7 +271,7 @@ class MediaGenerationService:
             return
 
         parent_dir = os.path.dirname(file_source)
-        if os.path.basename(parent_dir).startswith("jctranz_video_"):
+        if os.path.basename(parent_dir).startswith(("jctranz_video_", "jctranz_magica_video_")):
             shutil.rmtree(parent_dir, ignore_errors=True)
         else:
             try:

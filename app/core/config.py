@@ -26,6 +26,17 @@ class Settings(BaseSettings):
     fal_video_audio_on_price_per_second_usd: float = 0.0
     fal_video_edit_price_per_second_usd: float = 0.0
 
+    magica_api_key: str = ""
+    magica_base_url: str = "https://inference.magica.com/v1"
+    magica_video_provider_enabled: bool = True
+    magica_video_model_node_type: str = "seedance_2_0_fast"
+    magica_text_video_submodel: str = "seedance-2.0-fast-text-to-video"
+    magica_image_video_submodel: str = "seedance-2.0-fast-image-to-video"
+    magica_poll_interval_seconds: float = 3.0
+    magica_timeout_seconds: int = 900
+    magica_480p_price_per_second_usd: float = 0.1076
+    magica_720p_price_per_second_usd: float = 0.2419
+
     mongodb_uri: str = "mongodb://localhost:27017"
     mongodb_db_name: str = "jctranz_ai"
 
