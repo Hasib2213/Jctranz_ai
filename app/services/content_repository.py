@@ -53,6 +53,8 @@ class ContentRepository:
         openai_cost: float,
         openai_cost_formatted: str,
         openai_usage: dict[str, Any],
+        agentic_plan: dict[str, Any] | None = None,
+        settings: dict[str, Any] | None = None,
     ) -> dict[str, Any] | None:
         document = await self.get_content(user_id=user_id, content_id=content_id)
         if document is None:
@@ -72,16 +74,22 @@ class ContentRepository:
         }
 
         try:
+            update_set = {
+                "ai_refined_prompt": new_refined_prompt,
+                "last_openai_cost": openai_cost,
+                "last_openai_cost_formatted": openai_cost_formatted,
+                "last_openai_usage": openai_usage,
+                "updated_at": now,
+            }
+            if agentic_plan is not None:
+                update_set["agentic_plan"] = agentic_plan
+            if settings is not None:
+                update_set["settings"] = settings
+
             await self.collection.update_one(
                 {"_id": ObjectId(content_id), "user_id": user_id},
                 {
-                    "$set": {
-                        "ai_refined_prompt": new_refined_prompt,
-                        "last_openai_cost": openai_cost,
-                        "last_openai_cost_formatted": openai_cost_formatted,
-                        "last_openai_usage": openai_usage,
-                        "updated_at": now,
-                    },
+                    "$set": update_set,
                     "$inc": {"openai_cost_total": openai_cost},
                     "$push": {"prompt_versions": old_version},
                 },

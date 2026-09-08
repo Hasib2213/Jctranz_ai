@@ -34,9 +34,13 @@ class MagicaVideoService:
         settings = get_settings()
         self.api_key = settings.magica_api_key
         self.base_url = settings.magica_base_url.rstrip("/")
+        self.image_node_type = settings.magica_image_model_node_type
+        self.text_image_submodel = settings.magica_text_image_submodel
+        self.image_output_format = settings.magica_image_output_format
         self.node_type = settings.magica_video_model_node_type
         self.text_submodel = settings.magica_text_video_submodel
         self.image_submodel = settings.magica_image_video_submodel
+        self.video_edit_node_type = settings.magica_video_edit_model_node_type
         self.poll_interval_seconds = settings.magica_poll_interval_seconds
         self.timeout_seconds = settings.magica_timeout_seconds
         self.storage = CloudinaryService()
@@ -48,6 +52,44 @@ class MagicaVideoService:
     @property
     def is_configured(self) -> bool:
         return bool(self.api_key)
+
+    async def generate_image_from_prompt(
+        self,
+        *,
+        prompt: str,
+        resolution: str,
+        aspect_ratio: str,
+    ) -> tuple[str, dict[str, Any], str]:
+        if not self.api_key:
+            raise RuntimeError("MAGICA_API_KEY is not configured.")
+        if not self.image_node_type:
+            raise RuntimeError("MAGICA_IMAGE_MODEL_NODE_TYPE is not configured.")
+
+        input_payload = {
+            "prompt": prompt,
+            "num_images": 1,
+            "image_size": self._magica_image_size(resolution, aspect_ratio),
+            "output_format": self.image_output_format or "JPEG",
+        }
+        run = await self._run_and_wait(
+            node_type=self.image_node_type,
+            submodel_id=self.text_image_submodel or None,
+            input_payload=input_payload,
+        )
+        image_url = self._extract_media_url(run.get("output"))
+        if not image_url:
+            raise RuntimeError(f"Magica did not return an image URL for run {run.get('id')}.")
+
+        provider_response = {
+            "provider": "magica",
+            "node_type": self.image_node_type,
+            "submodel": self.text_image_submodel,
+            "run_id": run.get("id"),
+            "status": run.get("status"),
+            "creditUsed": run.get("creditUsed"),
+            "image_url": image_url,
+        }
+        return image_url, provider_response, self.text_image_submodel or self.image_node_type
 
     async def generate_video_from_prompt(
         self,
@@ -158,20 +200,66 @@ class MagicaVideoService:
         )
         return final_video_url, provider_response, model
 
+    async def edit_video_from_prompt(
+        self,
+        *,
+        prompt: str,
+        video_ref: str,
+        image_ref: str | None = None,
+        audio: bool = True,
+    ) -> tuple[str, dict[str, Any], str]:
+        if not self.api_key:
+            raise RuntimeError("MAGICA_API_KEY is not configured.")
+        if not self.video_edit_node_type:
+            raise RuntimeError("MAGICA_VIDEO_EDIT_MODEL_NODE_TYPE is not configured.")
+        if not video_ref:
+            raise RuntimeError("video_ref is required for video editing.")
+
+        input_payload: dict[str, Any] = {
+            "video_url": video_ref,
+            "prompt": prompt,
+            "keep_audio": audio,
+        }
+        if image_ref:
+            input_payload["image_urls"] = [image_ref]
+
+        run = await self._run_and_wait(
+            node_type=self.video_edit_node_type,
+            submodel_id=None,
+            input_payload=input_payload,
+        )
+        video_url = self._extract_media_url(run.get("output"))
+        if not video_url:
+            raise RuntimeError(
+                f"Magica did not return an edited video URL for run {run.get('id')}."
+            )
+
+        provider_response = {
+            "provider": "magica",
+            "node_type": self.video_edit_node_type,
+            "run_id": run.get("id"),
+            "status": run.get("status"),
+            "creditUsed": run.get("creditUsed"),
+            "video_url": video_url,
+            "keep_audio": audio,
+        }
+        return video_url, provider_response, self.video_edit_node_type
+
     async def _run_and_wait(
         self,
         *,
         node_type: str,
-        submodel_id: str,
+        submodel_id: str | None,
         input_payload: dict[str, Any],
     ) -> dict[str, Any]:
+        run_body: dict[str, Any] = {"input": input_payload}
+        if submodel_id:
+            run_body["subModelId"] = submodel_id
+
         run_id = await asyncio.to_thread(
             self._start_run,
             node_type,
-            {
-                "subModelId": submodel_id,
-                "input": input_payload,
-            },
+            run_body,
         )
 
         deadline = time.monotonic() + self.timeout_seconds
@@ -422,6 +510,21 @@ class MagicaVideoService:
     def _estimate_cost(self, time_seconds: int, resolution: str) -> float:
         price = self.prices_by_resolution.get(resolution.lower(), 0.0)
         return round(time_seconds * price, 8)
+
+    def _magica_image_size(self, resolution: str, aspect_ratio: str) -> str | dict[str, int]:
+        clean_aspect_ratio = aspect_ratio.strip()
+        if clean_aspect_ratio in {"1:1", "4:3", "3:4", "16:9", "9:16"}:
+            return clean_aspect_ratio
+
+        clean_resolution = resolution.strip().lower().replace(" ", "")
+        resolution_map = {
+            "480p": {"width": 854, "height": 480},
+            "720p": {"width": 1280, "height": 720},
+            "1080p": {"width": 1920, "height": 1080},
+        }
+        if clean_resolution in resolution_map:
+            return resolution_map[clean_resolution]
+        return "16:9"
 
     def _extract_media_url(self, value: Any) -> str | None:
         if isinstance(value, str):

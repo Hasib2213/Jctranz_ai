@@ -28,10 +28,16 @@ class Settings(BaseSettings):
 
     magica_api_key: str = ""
     magica_base_url: str = "https://inference.magica.com/v1"
+    magica_image_provider_enabled: bool = True
+    magica_image_model_node_type: str = "flux_2_max"
+    magica_text_image_submodel: str = "flux-2-max-text"
+    magica_image_output_format: str = "JPEG"
     magica_video_provider_enabled: bool = True
     magica_video_model_node_type: str = "seedance_2_0_fast"
     magica_text_video_submodel: str = "seedance-2.0-fast-text-to-video"
     magica_image_video_submodel: str = "seedance-2.0-fast-image-to-video"
+    magica_video_edit_provider_enabled: bool = True
+    magica_video_edit_model_node_type: str = "kling_o3_pro_video_edit"
     magica_poll_interval_seconds: float = 3.0
     magica_timeout_seconds: int = 900
     magica_480p_price_per_second_usd: float = 0.1076
