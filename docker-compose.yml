@@ -1,0 +1,61 @@
+services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: jctranz_redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - jctranz_net
+
+  api:
+    build:
+      context: .
+      target: runtime
+    container_name: jctranz_api
+    restart: unless-stopped
+    ports:
+      - "8025:8025"
+
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - jctranz_net
+
+  worker:
+    build:
+      context: .
+      target: runtime
+    container_name: jctranz_worker
+    restart: unless-stopped
+    command: ["arq", "app.worker.WorkerSettings"]
+    env_file:
+      - .env
+    environment:
+      - REDIS_URL=redis://redis:6379
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - jctranz_net
+
+volumes:
+  redis_data:
+    driver: local
+
+networks:
+  jctranz_net:
+    driver: bridge

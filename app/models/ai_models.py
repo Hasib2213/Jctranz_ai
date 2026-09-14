@@ -1,8 +1,8 @@
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class JobStatus(str, Enum):
@@ -13,35 +13,53 @@ class JobStatus(str, Enum):
     FAILED = "failed"
 
 
+class ScriptScene(BaseModel):
+    sequence: int = Field(..., ge=1)
+    time: str = Field(..., min_length=1, max_length=40)
+    visual: str = Field(..., min_length=1, max_length=1000)
+    voiceover: str = Field(..., min_length=1, max_length=1000)
+
+
 class ScriptGenerationRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
     product_name: str = Field(..., min_length=2, max_length=120)
     product_description: str = Field(..., min_length=10, max_length=2000)
-    creator_prompt: str | None = Field(default=None, max_length=1500)
-    target_audience: str | None = Field(default=None, max_length=300)
-    tone: str | None = Field(default="friendly, persuasive, UGC-style", max_length=200)
-    duration_seconds: int = Field(default=15, ge=5, le=30)
+    product_images: list[str] | None = None
+    time_seconds: int = Field(default=15, ge=5, le=30)
 
 
 class ScriptGenerationResponse(BaseModel):
     job_id: str
-    promotional_script: str
+    promotional_script: list[ScriptScene]
     status: JobStatus = JobStatus.SCRIPT_GENERATED
 
 
+class ScriptRegenerationRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+    job_id: str = Field(..., min_length=1, max_length=120)
+    promotional_script: list[ScriptScene] = Field(..., min_length=1)
+
+
 class VideoGenerationRequest(BaseModel):
-    job_id: str | None = None
+    user_id: str = Field(..., min_length=1, max_length=120)
+    job_id: str = Field(..., min_length=1, max_length=120)
+
+
+class VideoGenerationContext(BaseModel):
     product_name: str = Field(..., min_length=2, max_length=120)
-    product_image_url: HttpUrl
+    product_image_url: str | None = None
     approved_script: str = Field(..., min_length=10, max_length=3000)
     video_style: str = Field(default="UGC product promo", max_length=200)
     voice_style: str = Field(default="natural friendly voiceover", max_length=200)
     music_style: str = Field(default="clean upbeat background music", max_length=200)
-    duration_seconds: int = Field(default=15, ge=5, le=30)
+    time_seconds: int = Field(default=15, ge=5, le=30)
 
 
 class VideoGenerationResponse(BaseModel):
     job_id: str
     video_url: str
+    cdn_video_url: str | None = None
+    cloudinary_asset: dict[str, Any] | None = None
     provider_response: dict[str, Any] = Field(default_factory=dict)
     status: JobStatus = JobStatus.VIDEO_COMPLETED
 
@@ -49,13 +67,21 @@ class VideoGenerationResponse(BaseModel):
 class WorkflowJob(BaseModel):
     id: str | None = Field(default=None, alias="_id")
     status: JobStatus
+    user_id: str
     product_name: str
     product_description: str | None = None
+    product_images: list[str] | None = None
+    product_image_data_urls: list[str] | None = None
     product_image_url: str | None = None
-    creator_prompt: str | None = None
-    promotional_script: str | None = None
+    time_seconds: int | None = None
+    script_history: list[list[ScriptScene]] | None = None
+    promotional_script: list[ScriptScene] | None = None
+    approved_script_text: str | None = None
     final_video_prompt: str | None = None
+    video_generation_mode: str | None = None
     video_url: str | None = None
+    cdn_video_url: str | None = None
+    cloudinary_asset: dict[str, Any] | None = None
     provider_response: dict[str, Any] | None = None
     error_message: str | None = None
     created_at: datetime
@@ -63,3 +89,118 @@ class WorkflowJob(BaseModel):
 
     class Config:
         populate_by_name = True
+
+
+class AIGenerationType(str, Enum):
+    IMAGE_GENERATION = "image_generation"
+    VIDEO_GENERATION = "video_generation"
+    VIDEO_EDIT = "video_edit"
+
+
+class OpenAITokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
+
+
+class PromptVersion(BaseModel):
+    version: int
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+    created_at: datetime | None = None
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ImageGenerationPromptRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+    prompt: str = Field(..., min_length=1, max_length=3000)
+    resolution: str = Field(..., min_length=1, max_length=80)
+    aspect_ratio: str = Field(..., min_length=1, max_length=40)
+
+
+class ImageGenerationPromptResponse(BaseModel):
+    user_id: str
+    content_id: str
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    user_prompt: str
+    resolution: str
+    aspect_ratio: str
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class ImageGenerationPromptDetailResponse(ImageGenerationPromptResponse):
+    prompt_versions: list[PromptVersion] = Field(default_factory=list)
+    openai_tokens_total: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class VideoGenerationPromptRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+    prompt: str = Field(..., min_length=1, max_length=3000)
+    resolution: str = Field(..., min_length=1, max_length=80)
+    aspect_ratio: str = Field(..., min_length=1, max_length=40)
+    time: Literal[5, 10, 15, 20, 30]
+    audio: bool = True
+
+
+class VideoGenerationPromptResponse(BaseModel):
+    user_id: str
+    content_id: str
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    user_prompt: str
+    resolution: str
+    aspect_ratio: str
+    time: int
+    audio: bool
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class VideoGenerationPromptDetailResponse(VideoGenerationPromptResponse):
+    prompt_versions: list[PromptVersion] = Field(default_factory=list)
+    openai_tokens_total: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class PromptRegenerationRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+
+
+class VideoEditPromptResponse(BaseModel):
+    user_id: str
+    content_id: str
+    ai_refined_prompt: str = Field(alias="AI_refine_prompt")
+    user_prompt: str
+    video_ref: str
+    image_ref: str | None = None
+    audio: bool
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+
+    model_config = ConfigDict(populate_by_name=True)
+
+
+class VideoEditPromptDetailResponse(VideoEditPromptResponse):
+    prompt_versions: list[PromptVersion] = Field(default_factory=list)
+    openai_tokens_total: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
+
+
+class MediaGenerationRequest(BaseModel):
+    user_id: str = Field(..., min_length=1, max_length=120)
+    content_id: str = Field(..., min_length=1, max_length=120)
+
+
+class MediaGenerationResponse(BaseModel):
+    user_id: str
+    generated_content_id: str
+    content_url: str
+    provider: str = "magica"
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+    magica_credits: float = 0.0

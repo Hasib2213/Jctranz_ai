@@ -6,22 +6,19 @@ Python/FastAPI backend for this AI flow:
 Creator
 |
 v
-Enter product information / prompt
-|
-v
-Upload product image
+Enter user id, product name, description, optional product images, and target time
 |
 v
 OpenAI generates promotional script
 |
 v
-Creator edits / approves script
+User can regenerate the script from the current version
 |
 v
-System prepares final video prompt
+Use the returned job_id with user_id to generate the video from the saved script
 |
 v
-fal.AI generates ~15 sec promotional / UGC video with sound
+fal.AI generates the promotional / UGC video with sound
 |
 v
 System receives video_url
@@ -55,7 +52,29 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 uvicorn app.main:app --reload
+
+# Start ARQ Background Worker (Optional, for managing high concurrent loads)
+arq app.worker.WorkerSettings
 ```
+
+## Running with Docker (Recommended)
+
+Run API, Redis, and ARQ Worker together with one command:
+
+```bash
+# Build and start all services in detached mode
+docker compose up --build -d
+
+# Check running containers
+docker compose ps
+
+# View live logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+```
+
 
 ## Environment
 
@@ -64,32 +83,34 @@ Add these values to `.env`:
 ```env
 OPENAI_API_KEY=your_openai_api_key
 FAL_KEY=your_fal_api_key
+MAGICA_API_KEY=your_magica_api_key
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB_NAME=jctranz_ai
+REDIS_URL=redis://localhost:6379
 ```
+
 
 ## Main Endpoints
 
-```http
-POST /api/v1/ai/scripts
-```
+### Image Generation
+- `POST /api/v1/ai/image-generation-prompts`: Create and refine prompt with AI
+- `GET /api/v1/ai/image-generation-prompts/{content_id}`: Get prompt details and versions
+- `POST /api/v1/ai/image-generation-prompts/{content_id}/regenerate`: Regenerate/refine prompt
+- `POST /api/v1/ai/image-generations`: Generate image via fal.ai / Magica
 
-Generate a promotional script with OpenAI.
+### Video Generation
+- `POST /api/v1/ai/video-generation-prompts`: Create and refine video prompt with AI
+- `GET /api/v1/ai/video-generation-prompts/{content_id}`: Get prompt details and versions
+- `POST /api/v1/ai/video-generation-prompts/{content_id}/regenerate`: Regenerate/refine prompt
+- `POST /api/v1/ai/video-generations`: Generate video via fal.ai / Magica
 
-```http
-POST /api/v1/ai/videos
-```
+### Video Editing
+- `POST /api/v1/ai/video-edit-prompts`: Create and refine video editing prompt with AI
+- `GET /api/v1/ai/video-edit-prompts/{content_id}`: Get prompt details and versions
+- `POST /api/v1/ai/video-edit-prompts/{content_id}/regenerate`: Regenerate/refine prompt
+- `POST /api/v1/ai/video-edits`: Execute video editing workflow with segmentation
 
-Generate a video with fal.AI using an approved script and uploaded product image URL.
+### Health
+- `GET /health`: Basic health check
+- `GET /health/db`: Check whether MongoDB is reachable
 
-```http
-GET /api/v1/ai/jobs/{job_id}
-```
-
-Read saved AI workflow job status from MongoDB.
-
-```http
-GET /health/db
-```
-
-Check whether MongoDB is reachable. If this returns a DNS error, copy a fresh URI from MongoDB Atlas.
