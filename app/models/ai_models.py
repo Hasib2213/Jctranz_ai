@@ -97,16 +97,16 @@ class AIGenerationType(str, Enum):
     VIDEO_EDIT = "video_edit"
 
 
-class CostSummary(BaseModel):
-    openAI_cost: str = "$0.00"
-    falAI_cost: str = "$0.00"
-    total_cost: str = "$0.00"
+class OpenAITokenUsage(BaseModel):
+    input_tokens: int = 0
+    output_tokens: int = 0
+    total_tokens: int = 0
 
 
 class PromptVersion(BaseModel):
     version: int
     ai_refined_prompt: str = Field(alias="AI_refine_prompt")
-    openAI_cost: str = "$0.00"
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
     created_at: datetime | None = None
 
     model_config = ConfigDict(populate_by_name=True)
@@ -126,14 +126,14 @@ class ImageGenerationPromptResponse(BaseModel):
     user_prompt: str
     resolution: str
     aspect_ratio: str
-    openAI_cost: str = "$0.00"
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class ImageGenerationPromptDetailResponse(ImageGenerationPromptResponse):
     prompt_versions: list[PromptVersion] = Field(default_factory=list)
-    openAI_cost_total: str = "$0.00"
+    openai_tokens_total: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -156,14 +156,14 @@ class VideoGenerationPromptResponse(BaseModel):
     aspect_ratio: str
     time: int
     audio: bool
-    openAI_cost: str = "$0.00"
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class VideoGenerationPromptDetailResponse(VideoGenerationPromptResponse):
     prompt_versions: list[PromptVersion] = Field(default_factory=list)
-    openAI_cost_total: str = "$0.00"
+    openai_tokens_total: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -180,14 +180,14 @@ class VideoEditPromptResponse(BaseModel):
     video_ref: str
     image_ref: str | None = None
     audio: bool
-    openAI_cost: str = "$0.00"
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
 
     model_config = ConfigDict(populate_by_name=True)
 
 
 class VideoEditPromptDetailResponse(VideoEditPromptResponse):
     prompt_versions: list[PromptVersion] = Field(default_factory=list)
-    openAI_cost_total: str = "$0.00"
+    openai_tokens_total: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
     created_at: datetime | None = None
     updated_at: datetime | None = None
 
@@ -201,6 +201,6 @@ class MediaGenerationResponse(BaseModel):
     user_id: str
     generated_content_id: str
     content_url: str
-    openAI_cost: str
-    falAI_cost: str
-    total_cost: str
+    provider: str = "magica"
+    openai_tokens: OpenAITokenUsage = Field(default_factory=OpenAITokenUsage)
+    magica_credits: float = 0.0

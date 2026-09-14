@@ -19,6 +19,7 @@ from app.models.ai_models import (
     ImageGenerationPromptResponse,
     MediaGenerationRequest,
     MediaGenerationResponse,
+    OpenAITokenUsage,
     PromptVersion,
     VideoEditPromptDetailResponse,
     VideoEditPromptResponse,
@@ -71,7 +72,12 @@ class MediaGenerationService:
             generation_type=AIGenerationType.IMAGE_GENERATION.value,
             settings=settings,
         )
-        openai_cost_total = round(refine["cost"] + plan["cost"], 8)
+        combined_usage = self._combine_openai_usage(plan.get("usage"), refine.get("usage"))
+        clean_usage = {
+            "input_tokens": int(combined_usage.get("input_tokens") or 0),
+            "output_tokens": int(combined_usage.get("output_tokens") or 0),
+            "total_tokens": int(combined_usage.get("total_tokens") or 0),
+        }
         content_id = await self.contents.create_content(
             {
                 "user_id": payload.user_id,
@@ -81,20 +87,14 @@ class MediaGenerationService:
                 "settings": settings,
                 "references": {},
                 "agentic_plan": plan,
-                "openai_cost_total": openai_cost_total,
-                "last_openai_cost": openai_cost_total,
-                "last_openai_cost_formatted": self.costs.format_usd(openai_cost_total),
-                "last_openai_usage": self._combine_openai_usage(
-                    plan.get("usage"), refine.get("usage")
-                ),
+                "openai_tokens": clean_usage,
+                "openai_tokens_total": clean_usage,
+                "last_openai_usage": clean_usage,
                 "openai_model": refine["model"],
             }
         )
         content = await self._require_content(payload.user_id, content_id)
-        return self._image_prompt_response(
-            content,
-            openai_cost=self.costs.format_usd(openai_cost_total),
-        )
+        return self._image_prompt_response(content, openai_tokens=clean_usage)
 
     async def create_video_prompt(
         self, payload: VideoGenerationPromptRequest
@@ -116,7 +116,12 @@ class MediaGenerationService:
             generation_type=AIGenerationType.VIDEO_GENERATION.value,
             settings=settings,
         )
-        openai_cost_total = round(refine["cost"] + plan["cost"], 8)
+        combined_usage = self._combine_openai_usage(plan.get("usage"), refine.get("usage"))
+        clean_usage = {
+            "input_tokens": int(combined_usage.get("input_tokens") or 0),
+            "output_tokens": int(combined_usage.get("output_tokens") or 0),
+            "total_tokens": int(combined_usage.get("total_tokens") or 0),
+        }
         content_id = await self.contents.create_content(
             {
                 "user_id": payload.user_id,
@@ -126,20 +131,14 @@ class MediaGenerationService:
                 "settings": settings,
                 "references": {},
                 "agentic_plan": plan,
-                "openai_cost_total": openai_cost_total,
-                "last_openai_cost": openai_cost_total,
-                "last_openai_cost_formatted": self.costs.format_usd(openai_cost_total),
-                "last_openai_usage": self._combine_openai_usage(
-                    plan.get("usage"), refine.get("usage")
-                ),
+                "openai_tokens": clean_usage,
+                "openai_tokens_total": clean_usage,
+                "last_openai_usage": clean_usage,
                 "openai_model": refine["model"],
             }
         )
         content = await self._require_content(payload.user_id, content_id)
-        return self._video_prompt_response(
-            content,
-            openai_cost=self.costs.format_usd(openai_cost_total),
-        )
+        return self._video_prompt_response(content, openai_tokens=clean_usage)
 
     async def create_video_edit_prompt(
         self,
@@ -171,7 +170,12 @@ class MediaGenerationService:
             settings=settings,
             references=references,
         )
-        openai_cost_total = round(refine["cost"] + plan["cost"], 8)
+        combined_usage = self._combine_openai_usage(plan.get("usage"), refine.get("usage"))
+        clean_usage = {
+            "input_tokens": int(combined_usage.get("input_tokens") or 0),
+            "output_tokens": int(combined_usage.get("output_tokens") or 0),
+            "total_tokens": int(combined_usage.get("total_tokens") or 0),
+        }
         content_id = await self.contents.create_content(
             {
                 "user_id": user_id,
@@ -181,20 +185,14 @@ class MediaGenerationService:
                 "settings": settings,
                 "references": references,
                 "agentic_plan": plan,
-                "openai_cost_total": openai_cost_total,
-                "last_openai_cost": openai_cost_total,
-                "last_openai_cost_formatted": self.costs.format_usd(openai_cost_total),
-                "last_openai_usage": self._combine_openai_usage(
-                    plan.get("usage"), refine.get("usage")
-                ),
+                "openai_tokens": clean_usage,
+                "openai_tokens_total": clean_usage,
+                "last_openai_usage": clean_usage,
                 "openai_model": refine["model"],
             }
         )
         content = await self._require_content(user_id, content_id)
-        return self._video_edit_prompt_response(
-            content,
-            openai_cost=self.costs.format_usd(openai_cost_total),
-        )
+        return self._video_edit_prompt_response(content, openai_tokens=clean_usage)
 
     async def get_image_prompt(
         self, user_id: str, content_id: str
@@ -1894,14 +1892,17 @@ class MediaGenerationService:
             references=references,
             previous_refined_prompt=content.get("ai_refined_prompt"),
         )
-        openai_cost = round(refine["cost"] + plan["cost"], 8)
+        combined_usage = self._combine_openai_usage(plan.get("usage"), refine.get("usage"))
+        clean_usage = {
+            "input_tokens": int(combined_usage.get("input_tokens") or 0),
+            "output_tokens": int(combined_usage.get("output_tokens") or 0),
+            "total_tokens": int(combined_usage.get("total_tokens") or 0),
+        }
         updated = await self.contents.replace_refined_prompt(
             user_id=user_id,
             content_id=content_id,
             new_refined_prompt=refine["refined_prompt"],
-            openai_cost=openai_cost,
-            openai_cost_formatted=self.costs.format_usd(openai_cost),
-            openai_usage=self._combine_openai_usage(plan.get("usage"), refine.get("usage")),
+            openai_usage=clean_usage,
             agentic_plan=plan,
             settings=settings,
         )
@@ -1921,8 +1922,8 @@ class MediaGenerationService:
         fal_cost: float,
         storage_result: dict[str, Any],
     ) -> MediaGenerationResponse:
-        openai_cost = float(content.get("openai_cost_total") or 0.0)
-        total_cost = round(openai_cost + fal_cost, 8)
+        openai_tokens = self._total_token_usage_from_content(content)
+        magica_credits = self.costs.extract_magica_credits(provider_response)
         generated_content_id = await self.generations.create_generation(
             {
                 "user_id": user_id,
@@ -1932,9 +1933,8 @@ class MediaGenerationService:
                 "content_url": content_url,
                 "provider": provider,
                 "model": model,
-                "openai_cost": openai_cost,
-                "falai_cost": fal_cost,
-                "total_cost": total_cost,
+                "openai_tokens": openai_tokens.model_dump(),
+                "magica_credits": magica_credits,
                 "provider_response": provider_response,
                 "storage_result": storage_result,
             }
@@ -1943,9 +1943,9 @@ class MediaGenerationService:
             user_id=user_id,
             generated_content_id=generated_content_id,
             content_url=content_url,
-            openAI_cost=self.costs.format_usd(openai_cost),
-            falAI_cost=self.costs.format_usd(fal_cost),
-            total_cost=self.costs.format_usd(total_cost),
+            provider=provider,
+            openai_tokens=openai_tokens,
+            magica_credits=magica_credits,
         )
 
     async def _require_content(self, user_id: str, content_id: str) -> dict[str, Any]:
@@ -1962,14 +1962,69 @@ class MediaGenerationService:
             raise HTTPException(status_code=400, detail="Content type does not match endpoint.")
         return content
 
+    def _token_usage_from_content(
+        self, content: dict[str, Any], override: dict[str, Any] | None = None
+    ) -> OpenAITokenUsage:
+        raw = override or content.get("last_openai_usage") or content.get("openai_tokens") or {}
+        if not isinstance(raw, dict):
+            raw = {}
+        return OpenAITokenUsage(
+            input_tokens=int(raw.get("input_tokens") or 0),
+            output_tokens=int(raw.get("output_tokens") or 0),
+            total_tokens=int(raw.get("total_tokens") or 0),
+        )
+
+    def _total_token_usage_from_content(self, content: dict[str, Any]) -> OpenAITokenUsage:
+        raw = (
+            content.get("openai_tokens_total")
+            or content.get("last_openai_usage")
+            or content.get("openai_tokens")
+            or {}
+        )
+        if not isinstance(raw, dict):
+            raw = {}
+        return OpenAITokenUsage(
+            input_tokens=int(raw.get("input_tokens") or 0),
+            output_tokens=int(raw.get("output_tokens") or 0),
+            total_tokens=int(raw.get("total_tokens") or 0),
+        )
+
     def _versions(self, content: dict[str, Any]) -> list[PromptVersion]:
         versions = content.get("prompt_versions")
         if not isinstance(versions, list):
             return []
-        return [PromptVersion.model_validate(version) for version in versions]
+        cleaned: list[PromptVersion] = []
+        for version in versions:
+            if not isinstance(version, dict):
+                continue
+            raw_tokens = (
+                version.get("openai_tokens")
+                or version.get("openai_usage")
+                or {}
+            )
+            if not isinstance(raw_tokens, dict):
+                raw_tokens = {}
+            tokens = OpenAITokenUsage(
+                input_tokens=int(raw_tokens.get("input_tokens") or 0),
+                output_tokens=int(raw_tokens.get("output_tokens") or 0),
+                total_tokens=int(raw_tokens.get("total_tokens") or 0),
+            )
+            cleaned.append(
+                PromptVersion(
+                    version=int(version.get("version") or 1),
+                    AI_refine_prompt=str(
+                        version.get("AI_refine_prompt")
+                        or version.get("ai_refined_prompt")
+                        or ""
+                    ),
+                    openai_tokens=tokens,
+                    created_at=version.get("created_at"),
+                )
+            )
+        return cleaned
 
     def _image_prompt_response(
-        self, content: dict[str, Any], openai_cost: str | None = None
+        self, content: dict[str, Any], openai_tokens: dict[str, Any] | None = None
     ) -> ImageGenerationPromptResponse:
         settings = content.get("settings") or {}
         return ImageGenerationPromptResponse(
@@ -1979,7 +2034,7 @@ class MediaGenerationService:
             user_prompt=content["user_prompt"],
             resolution=settings.get("resolution", ""),
             aspect_ratio=settings.get("aspect_ratio", ""),
-            openAI_cost=openai_cost or self.costs.format_usd(content.get("last_openai_cost")),
+            openai_tokens=self._token_usage_from_content(content, openai_tokens),
         )
 
     def _image_prompt_detail_response(
@@ -1989,13 +2044,13 @@ class MediaGenerationService:
         return ImageGenerationPromptDetailResponse(
             **base.model_dump(by_alias=True),
             prompt_versions=self._versions(content),
-            openAI_cost_total=self.costs.format_usd(content.get("openai_cost_total")),
+            openai_tokens_total=self._total_token_usage_from_content(content),
             created_at=content.get("created_at"),
             updated_at=content.get("updated_at"),
         )
 
     def _video_prompt_response(
-        self, content: dict[str, Any], openai_cost: str | None = None
+        self, content: dict[str, Any], openai_tokens: dict[str, Any] | None = None
     ) -> VideoGenerationPromptResponse:
         settings = content.get("settings") or {}
         return VideoGenerationPromptResponse(
@@ -2007,7 +2062,7 @@ class MediaGenerationService:
             aspect_ratio=settings.get("aspect_ratio", ""),
             time=int(settings.get("time") or 0),
             audio=bool(settings.get("audio", True)),
-            openAI_cost=openai_cost or self.costs.format_usd(content.get("last_openai_cost")),
+            openai_tokens=self._token_usage_from_content(content, openai_tokens),
         )
 
     def _video_prompt_detail_response(
@@ -2017,13 +2072,13 @@ class MediaGenerationService:
         return VideoGenerationPromptDetailResponse(
             **base.model_dump(by_alias=True),
             prompt_versions=self._versions(content),
-            openAI_cost_total=self.costs.format_usd(content.get("openai_cost_total")),
+            openai_tokens_total=self._total_token_usage_from_content(content),
             created_at=content.get("created_at"),
             updated_at=content.get("updated_at"),
         )
 
     def _video_edit_prompt_response(
-        self, content: dict[str, Any], openai_cost: str | None = None
+        self, content: dict[str, Any], openai_tokens: dict[str, Any] | None = None
     ) -> VideoEditPromptResponse:
         settings = content.get("settings") or {}
         references = content.get("references") or {}
@@ -2035,7 +2090,7 @@ class MediaGenerationService:
             video_ref=references.get("video_ref") or "",
             image_ref=references.get("image_ref"),
             audio=bool(settings.get("audio", True)),
-            openAI_cost=openai_cost or self.costs.format_usd(content.get("last_openai_cost")),
+            openai_tokens=self._token_usage_from_content(content, openai_tokens),
         )
 
     def _video_edit_prompt_detail_response(
@@ -2045,7 +2100,8 @@ class MediaGenerationService:
         return VideoEditPromptDetailResponse(
             **base.model_dump(by_alias=True),
             prompt_versions=self._versions(content),
-            openAI_cost_total=self.costs.format_usd(content.get("openai_cost_total")),
+            openai_tokens_total=self._total_token_usage_from_content(content),
             created_at=content.get("created_at"),
             updated_at=content.get("updated_at"),
         )
+

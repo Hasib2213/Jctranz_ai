@@ -50,8 +50,6 @@ class ContentRepository:
         user_id: str,
         content_id: str,
         new_refined_prompt: str,
-        openai_cost: float,
-        openai_cost_formatted: str,
         openai_usage: dict[str, Any],
         agentic_plan: dict[str, Any] | None = None,
         settings: dict[str, Any] | None = None,
@@ -64,21 +62,36 @@ class ContentRepository:
         previous_versions = document.get("prompt_versions")
         version_number = len(previous_versions) + 1 if isinstance(previous_versions, list) else 1
 
+        old_tokens = (
+            document.get("last_openai_usage")
+            or document.get("openai_tokens")
+            or {}
+        )
+        if not isinstance(old_tokens, dict):
+            old_tokens = {}
+
         old_version = {
             "version": version_number,
             "AI_refine_prompt": document.get("ai_refined_prompt", ""),
-            "openAI_cost": document.get("last_openai_cost_formatted", "$0.00"),
-            "openai_cost": document.get("last_openai_cost", 0.0),
-            "openai_usage": document.get("last_openai_usage", {}),
+            "openai_tokens": {
+                "input_tokens": int(old_tokens.get("input_tokens") or 0),
+                "output_tokens": int(old_tokens.get("output_tokens") or 0),
+                "total_tokens": int(old_tokens.get("total_tokens") or 0),
+            },
             "created_at": document.get("updated_at") or document.get("created_at") or now,
         }
 
+        clean_usage = {
+            "input_tokens": int(openai_usage.get("input_tokens") or 0),
+            "output_tokens": int(openai_usage.get("output_tokens") or 0),
+            "total_tokens": int(openai_usage.get("total_tokens") or 0),
+        }
+
         try:
-            update_set = {
+            update_set: dict[str, Any] = {
                 "ai_refined_prompt": new_refined_prompt,
-                "last_openai_cost": openai_cost,
-                "last_openai_cost_formatted": openai_cost_formatted,
-                "last_openai_usage": openai_usage,
+                "last_openai_usage": clean_usage,
+                "openai_tokens": clean_usage,
                 "updated_at": now,
             }
             if agentic_plan is not None:
@@ -86,13 +99,28 @@ class ContentRepository:
             if settings is not None:
                 update_set["settings"] = settings
 
+            existing_total = document.get("openai_tokens_total")
+            update_doc: dict[str, Any] = {
+                "$set": update_set,
+                "$push": {"prompt_versions": old_version},
+            }
+
+            if not isinstance(existing_total, dict):
+                update_set["openai_tokens_total"] = {
+                    "input_tokens": int(old_tokens.get("input_tokens") or 0) + clean_usage["input_tokens"],
+                    "output_tokens": int(old_tokens.get("output_tokens") or 0) + clean_usage["output_tokens"],
+                    "total_tokens": int(old_tokens.get("total_tokens") or 0) + clean_usage["total_tokens"],
+                }
+            else:
+                update_doc["$inc"] = {
+                    "openai_tokens_total.input_tokens": clean_usage["input_tokens"],
+                    "openai_tokens_total.output_tokens": clean_usage["output_tokens"],
+                    "openai_tokens_total.total_tokens": clean_usage["total_tokens"],
+                }
+
             await self.collection.update_one(
                 {"_id": ObjectId(content_id), "user_id": user_id},
-                {
-                    "$set": update_set,
-                    "$inc": {"openai_cost_total": openai_cost},
-                    "$push": {"prompt_versions": old_version},
-                },
+                update_doc,
             )
         except (ConfigurationError, PyMongoError, OSError) as exc:
             raise MongoConnectionError("MongoDB connection failed while updating content.") from exc
