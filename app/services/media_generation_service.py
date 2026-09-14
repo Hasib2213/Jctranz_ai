@@ -27,7 +27,10 @@ from app.models.ai_models import (
     VideoGenerationPromptRequest,
     VideoGenerationPromptResponse,
 )
+from app.core.redis import get_arq_redis
 from app.services.cloudinary_service import CloudinaryService
+
+
 from app.services.content_repository import ContentRepository
 from app.services.cost_service import CostService
 from app.services.fal_service import FalVideoService
@@ -241,6 +244,19 @@ class MediaGenerationService:
         return self._video_edit_prompt_detail_response(content)
 
     async def generate_image(self, payload: MediaGenerationRequest) -> MediaGenerationResponse:
+        pool = await get_arq_redis()
+        if pool is not None and self.settings.arq_enabled:
+            try:
+                job = await pool.enqueue_job("task_generate_image", payload.user_id, payload.content_id)
+                if job is not None:
+                    result = await job.result(timeout=self.settings.arq_job_timeout, poll_delay=1.0)
+                    return MediaGenerationResponse.model_validate(result)
+            except Exception as exc:
+                logger.warning("ARQ job execution failed (%s), falling back to direct execution.", exc)
+
+        return await self._execute_direct_image_generation(payload)
+
+    async def _execute_direct_image_generation(self, payload: MediaGenerationRequest) -> MediaGenerationResponse:
         content = await self._require_typed_content(
             payload.user_id, payload.content_id, AIGenerationType.IMAGE_GENERATION
         )
@@ -268,6 +284,19 @@ class MediaGenerationService:
         )
 
     async def generate_video(self, payload: MediaGenerationRequest) -> MediaGenerationResponse:
+        pool = await get_arq_redis()
+        if pool is not None and self.settings.arq_enabled:
+            try:
+                job = await pool.enqueue_job("task_generate_video", payload.user_id, payload.content_id)
+                if job is not None:
+                    result = await job.result(timeout=self.settings.arq_job_timeout, poll_delay=1.0)
+                    return MediaGenerationResponse.model_validate(result)
+            except Exception as exc:
+                logger.warning("ARQ job execution failed (%s), falling back to direct execution.", exc)
+
+        return await self._execute_direct_video_generation(payload)
+
+    async def _execute_direct_video_generation(self, payload: MediaGenerationRequest) -> MediaGenerationResponse:
         content = await self._require_typed_content(
             payload.user_id, payload.content_id, AIGenerationType.VIDEO_GENERATION
         )
@@ -332,6 +361,19 @@ class MediaGenerationService:
                 pass
 
     async def edit_video(self, payload: MediaGenerationRequest) -> MediaGenerationResponse:
+        pool = await get_arq_redis()
+        if pool is not None and self.settings.arq_enabled:
+            try:
+                job = await pool.enqueue_job("task_generate_video_edit", payload.user_id, payload.content_id)
+                if job is not None:
+                    result = await job.result(timeout=self.settings.arq_job_timeout, poll_delay=1.0)
+                    return MediaGenerationResponse.model_validate(result)
+            except Exception as exc:
+                logger.warning("ARQ job execution failed (%s), falling back to direct execution.", exc)
+
+        return await self._execute_direct_video_edit(payload)
+
+    async def _execute_direct_video_edit(self, payload: MediaGenerationRequest) -> MediaGenerationResponse:
         content = await self._require_typed_content(
             payload.user_id, payload.content_id, AIGenerationType.VIDEO_EDIT
         )
@@ -1923,7 +1965,9 @@ class MediaGenerationService:
         storage_result: dict[str, Any],
     ) -> MediaGenerationResponse:
         openai_tokens = self._total_token_usage_from_content(content)
-        magica_credits = self.costs.extract_magica_credits(provider_response)
+        magica_credits = self.costs.extract_magica_credits(
+            provider_response, fallback_cost_usd=fal_cost
+        )
         generated_content_id = await self.generations.create_generation(
             {
                 "user_id": user_id,
@@ -1935,10 +1979,12 @@ class MediaGenerationService:
                 "model": model,
                 "openai_tokens": openai_tokens.model_dump(),
                 "magica_credits": magica_credits,
+                "falai_cost": fal_cost,
                 "provider_response": provider_response,
                 "storage_result": storage_result,
             }
         )
+
         return MediaGenerationResponse(
             user_id=user_id,
             generated_content_id=generated_content_id,

@@ -7,6 +7,7 @@ from app.api.routes.ai_routes import router as ai_router
 from app.api.routes.health_routes import router as health_router
 from app.api.routes.webhook_routes import router as webhook_router
 from app.core.config import get_settings
+from app.core.redis import close_arq_redis
 from app.db.mongo import close_mongo_client
 
 
@@ -14,6 +15,8 @@ from app.db.mongo import close_mongo_client
 async def lifespan(app: FastAPI):
     yield
     await close_mongo_client()
+    await close_arq_redis()
+
 
 
 def create_app() -> FastAPI:

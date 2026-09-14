@@ -51,7 +51,13 @@ class Settings(BaseSettings):
     cloudinary_api_secret: str = ""
     cloudinary_folder: str = "jctranz_ai_assets"
 
+    redis_url: str = "redis://localhost:6379"
+    arq_max_jobs: int = 10
+    arq_job_timeout: int = 1200
+    arq_enabled: bool = True
+
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+
 
 
 @lru_cache

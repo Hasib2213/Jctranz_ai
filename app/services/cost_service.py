@@ -133,45 +133,49 @@ class CostService:
 
         return self._parse_number(value)
 
-    def extract_magica_credits(self, provider_response: Any) -> float:
-        if not isinstance(provider_response, dict):
-            return 0.0
+    def extract_magica_credits(
+        self, provider_response: Any, fallback_cost_usd: float = 0.0
+    ) -> float:
+        if isinstance(provider_response, dict):
+            for key in ("creditUsed", "credit_used", "credits_used", "credits"):
+                raw = provider_response.get(key)
+                if raw is not None:
+                    parsed = self._parse_number(raw)
+                    if parsed is not None:
+                        return round(parsed, 4)
 
-        for key in ("creditUsed", "credit_used", "credits_used", "credits"):
-            raw = provider_response.get(key)
-            if raw is not None:
+            clips = (
+                provider_response.get("clip_responses")
+                or provider_response.get("chunk_results")
+                or []
+            )
+            total = 0.0
+            found = False
+            for clip in clips:
+                if isinstance(clip, dict):
+                    for key in ("creditUsed", "credit_used", "credits_used", "credits"):
+                        raw = clip.get(key)
+                        if raw is not None:
+                            parsed = self._parse_number(raw)
+                            if parsed is not None:
+                                total += parsed
+                                found = True
+                                break
+            if found:
+                return round(total, 4)
+
+            run = provider_response.get("run")
+            if isinstance(run, dict):
+                raw = run.get("creditUsed")
                 parsed = self._parse_number(raw)
                 if parsed is not None:
                     return round(parsed, 4)
 
-        clips = (
-            provider_response.get("clip_responses")
-            or provider_response.get("chunk_results")
-            or []
-        )
-        total = 0.0
-        found = False
-        for clip in clips:
-            if isinstance(clip, dict):
-                for key in ("creditUsed", "credit_used", "credits_used", "credits"):
-                    raw = clip.get(key)
-                    if raw is not None:
-                        parsed = self._parse_number(raw)
-                        if parsed is not None:
-                            total += parsed
-                            found = True
-                            break
-        if found:
-            return round(total, 4)
-
-        run = provider_response.get("run")
-        if isinstance(run, dict):
-            raw = run.get("creditUsed")
-            parsed = self._parse_number(raw)
-            if parsed is not None:
-                return round(parsed, 4)
+        if fallback_cost_usd > 0:
+            return float(round(fallback_cost_usd * 1_000_000, 4))
 
         return 0.0
+
 
     def _parse_number(self, raw: Any) -> float | None:
         if raw is None or isinstance(raw, bool):

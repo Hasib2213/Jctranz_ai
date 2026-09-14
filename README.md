@@ -52,7 +52,29 @@ python -m venv .venv
 pip install -r requirements.txt
 copy .env.example .env
 uvicorn app.main:app --reload
+
+# Start ARQ Background Worker (Optional, for managing high concurrent loads)
+arq app.worker.WorkerSettings
 ```
+
+## Running with Docker (Recommended)
+
+Run API, Redis, and ARQ Worker together with one command:
+
+```bash
+# Build and start all services in detached mode
+docker compose up --build -d
+
+# Check running containers
+docker compose ps
+
+# View live logs
+docker compose logs -f
+
+# Stop all services
+docker compose down
+```
+
 
 ## Environment
 
@@ -61,9 +83,12 @@ Add these values to `.env`:
 ```env
 OPENAI_API_KEY=your_openai_api_key
 FAL_KEY=your_fal_api_key
+MAGICA_API_KEY=your_magica_api_key
 MONGODB_URI=mongodb://localhost:27017
 MONGODB_DB_NAME=jctranz_ai
+REDIS_URL=redis://localhost:6379
 ```
+
 
 ## Main Endpoints
 
