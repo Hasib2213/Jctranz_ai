@@ -67,36 +67,25 @@ MONGODB_DB_NAME=jctranz_ai
 
 ## Main Endpoints
 
-```http
-POST /api/v1/ai/scripts
-```
+### Image Generation
+- `POST /api/v1/ai/image-generation-prompts`: Create and refine prompt with AI
+- `GET /api/v1/ai/image-generation-prompts/{content_id}`: Get prompt details and versions
+- `POST /api/v1/ai/image-generation-prompts/{content_id}/regenerate`: Regenerate/refine prompt
+- `POST /api/v1/ai/image-generations`: Generate image via fal.ai / Magica
 
-Generate a promotional script with OpenAI from `multipart/form-data`:
-`user_id`, `product_name`, `product_description`, optional `product_images` files, and `time_seconds`.
-Response format: JSON with a `scenes` array, where each scene has `sequence`, `time`, `visual`, and `voiceover`.
+### Video Generation
+- `POST /api/v1/ai/video-generation-prompts`: Create and refine video prompt with AI
+- `GET /api/v1/ai/video-generation-prompts/{content_id}`: Get prompt details and versions
+- `POST /api/v1/ai/video-generation-prompts/{content_id}/regenerate`: Regenerate/refine prompt
+- `POST /api/v1/ai/video-generations`: Generate video via fal.ai / Magica
 
-```http
-POST /api/v1/ai/scripts/regenerate
-```
+### Video Editing
+- `POST /api/v1/ai/video-edit-prompts`: Create and refine video editing prompt with AI
+- `GET /api/v1/ai/video-edit-prompts/{content_id}`: Get prompt details and versions
+- `POST /api/v1/ai/video-edit-prompts/{content_id}/regenerate`: Regenerate/refine prompt
+- `POST /api/v1/ai/video-edits`: Execute video editing workflow with segmentation
 
-Regenerate the current script using JSON:
-`user_id`, `job_id`, and `promotional_script`.
+### Health
+- `GET /health`: Basic health check
+- `GET /health/db`: Check whether MongoDB is reachable
 
-```http
-POST /api/v1/ai/videos
-```
-
-Generate a video with fal.AI using the saved script from the script job.
-Send only `user_id` and `job_id`; the service reuses the stored script and product image data.
-
-```http
-GET /api/v1/ai/jobs/{job_id}
-```
-
-Read saved AI workflow job status from MongoDB.
-
-```http
-GET /health/db
-```
-
-Check whether MongoDB is reachable. If this returns a DNS error, copy a fresh URI from MongoDB Atlas.
